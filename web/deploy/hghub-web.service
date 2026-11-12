@@ -1,0 +1,33 @@
+[Unit]
+Description=HGhub 网页版（Rust 核心 + HTTP 代理）
+Documentation=https://github.com/itestit/HGhub
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# 专用低权限用户：useradd -r -s /usr/sbin/nologin hghub
+User=hghub
+Group=hghub
+WorkingDirectory=/opt/hghub-web
+# 先只绑本机，本地验通后再决定是否对外
+EnvironmentFile=/etc/hghub-web/env
+ExecStart=/opt/hghub-web/hghub-web
+Restart=always
+RestartSec=3
+# 日志：journalctl -u hghub-web -f
+StandardOutput=journal
+StandardError=journal
+
+# 兜底加固（不改变功能）
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/hghub-web
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+
+[Install]
+WantedBy=multi-user.target

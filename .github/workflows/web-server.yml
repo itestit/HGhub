@@ -1,0 +1,55 @@
+name: Web server (linux static binary)
+
+# 只为网页版打一个 Linux 静态二进制（musl），产物里带前端 dist。
+on:
+  workflow_dispatch:
+  push:
+    branches: [web-deploy]
+    paths:
+      - "web/server/**"
+      - "web/dist/**"
+      - ".github/workflows/web-server.yml"
+
+jobs:
+  build:
+    name: Build hghub-web (x86_64-musl)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-musl
+
+      - name: musl toolchain
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq musl-tools pkg-config
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: web/server -> target
+          key: web-musl
+
+      - name: 编译
+        working-directory: web/server
+        run: cargo build --release --target x86_64-unknown-linux-musl
+
+      - name: 打包（二进制 + 前端 dist + systemd 单元）
+        run: |
+          set -euo pipefail
+          V="$(grep -m1 '^version' web/server/Cargo.toml | cut -d'"' -f2)"
+          PKG="hghub-web_${V}_linux_x86_64"
+          mkdir -p "pkg/$PKG/dist" "pkg/$PKG/deploy"
+          cp web/server/target/x86_64-unknown-linux-musl/release/hghub-web "pkg/$PKG/"
+          cp -r web/dist/. "pkg/$PKG/dist/"
+          cp web/deploy/hghub-web.service web/deploy/README.md "pkg/$PKG/deploy/" || true
+          tar -C pkg -czf "$PKG.tar.gz" "$PKG"
+          ls -lh "$PKG.tar.gz"
+          echo "PKG=$PKG" >> "$GITHUB_ENV"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hghub-web-linux
+          path: hghub-web_*_linux_x86_64.tar.gz
+          if-no-files-found: error
